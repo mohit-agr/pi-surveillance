@@ -3,9 +3,11 @@ import time
 import threading
 import numpy as np
 import multiprocessing
+import datetime
 from src.UploadToStorage import ImageUploader
 
 timerSetter = 10
+video_id = None
 
 class VideoGetter:
     def __init__(self, src, motion_detected_event, img_queue):
@@ -20,22 +22,23 @@ class VideoGetter:
         return self
 
     def get(self):
+        global video_id
         while not self.stopped:
             if not self.grabbed:
                 self.stop()
             else:
                 if self.motion_detected_event.is_set():
-                    self.image_queue.put(self.frame)
+                    self.image_queue.put((video_id, datetime.datetime.utcnow(), self.frame))
                 (self.grabbed, self.frame) = self.stream.read()
 
     def stop(self):
         self.stopped = True
 
 def timer(motion_detected_event):
-    global timerSetter
+    global timerSetter, video_id
     while True:
         motion_detected_event.wait()
-        # print (datetime.datetime.now().time(), "started new timer, thread Id", threading.get_ident())
+        video_id = datetime.datetime.utcnow().strftime('%y-%m-%d %H:%M:%S')
         while timerSetter < 10:
             time.sleep(1)
             timerSetter += 1

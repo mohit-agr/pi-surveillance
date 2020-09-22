@@ -1,7 +1,6 @@
 from azure.storage.blob import BlobServiceClient
 import cv2
 import multiprocessing
-import datetime
 
 class ImageUploader:
     def __init__(self, image_stream):
@@ -22,7 +21,7 @@ class ImageUploader:
 
     def upload(self):
         while True:
-            img = self.image_stream.get()
+            id, ts, img = self.image_stream.get()
             img_str = cv2.imencode('.jpg', img)[1].tobytes()
-            blob_name = datetime.datetime.utcnow().isoformat(sep=' ', timespec='milliseconds') + '.jpg'
-            self.blob_container_client.upload_blob(name=blob_name, data=img_str)
+            blob_path = 'raw/' + id + '/' + ts.isoformat(sep=' ', timespec='milliseconds') + '.jpg'
+            self.blob_container_client.upload_blob(name=blob_path, data=img_str)
