@@ -4,7 +4,7 @@ import threading
 import numpy as np
 import multiprocessing
 import datetime
-from src.UploadToStorage import ImageUploader
+from src.UploadToStorageAes import ImageUploader
 
 timerSetter = 10
 video_id = None
