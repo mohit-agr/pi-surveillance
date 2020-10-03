@@ -38,7 +38,8 @@ def timer(motion_detected_event):
     global timerSetter, video_id
     while True:
         motion_detected_event.wait()
-        video_id = datetime.datetime.utcnow().strftime('%y-%m-%d %H:%M:%S')
+        video_id = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        print (video_id, 'starting new timer. Thread Id: ', threading.get_ident())
         while timerSetter < 10:
             time.sleep(1)
             timerSetter += 1

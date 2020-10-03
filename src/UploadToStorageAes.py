@@ -3,6 +3,8 @@ import cv2
 import multiprocessing
 import threading
 import queue
+import os
+from cryptography.fernet import Fernet
 
 class ImageUploader:
     def __init__(self, image_stream: multiprocessing.Queue):
@@ -10,6 +12,16 @@ class ImageUploader:
         blob_service_client = BlobServiceClient.from_connection_string(connection_string)
         container_name = 'pi-surveillance'
         self.read_lock = threading.Lock()
+
+        if not os.path.exists('../secrets/key.key'):
+            print ('Generating private key')
+            key = Fernet.generate_key()
+            file = open('../secrets/key.key', 'wb')
+            file.write(key)
+            file.close()
+
+        with open('../secrets/key.key', 'rb') as f:
+            self.fernet = Fernet(f.read())
 
         try:
             self.blob_container_client = blob_service_client.create_container(name=container_name)
@@ -26,6 +38,8 @@ class ImageUploader:
 
     def worker(self):
         print ('Starting thread', threading.current_thread().name)
+        codec = 'MJPG'
+        fourcc = cv2.VideoWriter_fourcc(*codec)
         q = queue.Queue(10)
         while True:
             video_id = None
@@ -38,25 +52,26 @@ class ImageUploader:
             self.read_lock.release()
 
             print ('Read images. Thread Id: ', threading.current_thread().name)
-            codec = 'MJPG'
-            fourcc = cv2.VideoWriter_fourcc(*codec)
-            writer = None
-
             video_path = ts.isoformat(sep=' ', timespec='milliseconds') + ".avi"
+            writer = None
             print (video_path)
             while not q.empty():
                 frame = q.get()
+                img = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 if writer is None:
-                    (h, w) = frame.shape[:2]
-                    writer = cv2.VideoWriter(video_path, fourcc, 20, (w, h), True)
-
-                writer.write(frame)
+                    (h,w) = img.shape
+                    writer = cv2.VideoWriter(video_path, fourcc, 20, (w,h), False)
+                writer.write(img)
 
             writer.release()
-            print ('Uploading video. Thread Id: ', threading.current_thread().name)
-            self.upload_to_blob(video_id, video_path)
+            with open(video_path, "rb") as f:
+                data = f.read()
 
-    def upload_to_blob(self, video_id, video_file):
+            encrypted_data = self.fernet.encrypt(data)
+            print ('Uploading video. Thread Id: ', threading.current_thread().name)
+            self.upload_to_blob(video_id, video_path + ".encrypted", encrypted_data)
+            os.remove(video_path)
+
+    def upload_to_blob(self, video_id, video_file, data):
         video_blob_path = "videos/" + video_id + "/" + video_file
-        with open(video_file, "rb") as vfile:
-            self.blob_container_client.upload_blob(name=video_blob_path, data=vfile)
+        self.blob_container_client.upload_blob(name=video_blob_path, data=data)
