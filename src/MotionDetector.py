@@ -44,16 +44,21 @@ def timer(motion_detected_event):
             time.sleep(1)
             timerSetter += 1
 
+        print ('No motion detected for last 10 seconds')
         motion_detected_event.clear()
+
+def upload_images(img_queue: multiprocessing.Queue, motion_detected_event: multiprocessing.Event):
+    uploader = ImageUploader(img_queue, motion_detected_event)
+    uploader.start()
 
 def detect_motion():
     global timerSetter
-    motion_detected_event = threading.Event()
+    motion_detected_event = multiprocessing.Event()
     img_queue = multiprocessing.Queue()
 
     video_getter = VideoGetter(0, motion_detected_event, img_queue).start()
     threading.Thread(name='timer', target=timer, args=(motion_detected_event,)).start()
-    ImageUploader(img_queue).start()
+    multiprocessing.Process(name='image_uploader', target=upload_images, args=(img_queue,motion_detected_event,)).start()
 
     frame1 = video_getter.frame
     gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)

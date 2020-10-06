@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 
 class ImageUploader:
-    def __init__(self, image_stream: multiprocessing.Queue):
+    def __init__(self, image_stream: multiprocessing.Queue, motion_detected_event: multiprocessing.Event):
         connection_string = open('../secrets/BlobStorageConnectionString.txt', 'r').read()
         blob_service_client = BlobServiceClient.from_connection_string(connection_string)
         container_name = 'pi-surveillance'
@@ -18,14 +18,10 @@ class ImageUploader:
             self.blob_container_client = blob_service_client.get_container_client(container=container_name)
 
         self.image_stream = image_stream
-        self.process = multiprocessing.Process(target=self.upload, args=())
+        self.motion_event = motion_detected_event
 
-    def start(self):
-        self.process.start()
-
-    def upload(self):
         if not os.path.exists('../secrets/key.key'):
-            print ('Generating private key')
+            print('Generating private key')
             key = Fernet.generate_key()
             file = open('../secrets/key.key', 'wb')
             file.write(key)
@@ -34,18 +30,28 @@ class ImageUploader:
         with open('../secrets/key.key', 'rb') as f:
             self.fernet = Fernet(f.read())
 
+    def start(self):
         print ('started video uploader')
         with ThreadPoolExecutor(max_workers=5) as executor:
             while True:
-                image_q = queue.Queue(10)
-                while not image_q.full():
+                self.motion_event.wait()
+
+                image_q = None
+                while not self.image_stream.empty():
+                    if image_q is None:
+                        image_q = queue.Queue(10)
+
                     image_q.put(self.image_stream.get())
 
-                executor.submit(self.worker, image_q)
+                    if image_q.full():
+                        executor.submit(self.worker, image_q)
+                        image_q = None
+
+                if not image_q is None:
+                    executor.submit(self.worker, image_q)
 
     def worker(self, q):
         if q is None or q.empty():
-            print ('Empty q detected. Returning early.')
             return
 
         print ('Starting thread', threading.current_thread().ident)
