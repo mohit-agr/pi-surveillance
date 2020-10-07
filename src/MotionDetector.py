@@ -55,7 +55,7 @@ def detect_motion():
     global timerSetter
     motion_detected_event = multiprocessing.Event()
     img_queue = multiprocessing.Queue()
-
+    print ('Starting motion detector. Process id:', multiprocessing.current_process().ident)
     video_getter = VideoGetter(0, motion_detected_event, img_queue).start()
     threading.Thread(name='timer', target=timer, args=(motion_detected_event,)).start()
     multiprocessing.Process(name='image_uploader', target=upload_images, args=(img_queue,motion_detected_event,)).start()
@@ -64,8 +64,7 @@ def detect_motion():
     gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
 
     while True:
-        if not motion_detected_event.is_set():
-            time.sleep(1)
+        time.sleep(1)
         frame2 = video_getter.frame
         gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
 

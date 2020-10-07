@@ -31,17 +31,17 @@ class ImageUploader:
             self.fernet = Fernet(f.read())
 
     def start(self):
-        print ('started video uploader')
+        print ('started video uploader. Process ID:', multiprocessing.current_process().ident)
         with ThreadPoolExecutor(max_workers=5) as executor:
             while True:
                 self.motion_event.wait()
 
                 image_q = None
-                while not self.image_stream.empty():
+                while self.motion_event.is_set() or not self.image_stream.empty():
                     if image_q is None:
                         image_q = queue.Queue(10)
 
-                    image_q.put(self.image_stream.get())
+                    image_q.put(self.image_stream.get(timeout=10))
 
                     if image_q.full():
                         executor.submit(self.worker, image_q)
